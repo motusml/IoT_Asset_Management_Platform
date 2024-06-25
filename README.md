@@ -36,7 +36,7 @@ bash clean-and-build.sh -d
 bash clean-and-build.sh -c
 ```
 
-You can find more information [here]()
+You can find more information [here](/Documents)
 
 ## Testing the Platform
 To simulate the addition of new devices, you have to run 2 python scripts in the PythonScripts folder. To do that, create a python virtual environment and use the following commands:
