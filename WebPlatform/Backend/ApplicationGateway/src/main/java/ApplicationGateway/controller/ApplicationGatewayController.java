@@ -1,0 +1,464 @@
+package ApplicationGateway.controller;
+
+import ApplicationGateway.dto.AsyncControllerDTO.DeviceDataDTO;
+import ApplicationGateway.dto.SecurityResponse;
+import ApplicationGateway.dto.assetManDTO.*;
+import ApplicationGateway.dto.auth_AuthDTO.*;
+import ApplicationGateway.dto.dataManagerDTO.UserInfoDTO;
+import ApplicationGateway.dto.frontend.CompactUserDTO;
+import ApplicationGateway.dto.frontend.DeviceDataMetadataDTO;
+import ApplicationGateway.dto.frontend.ModelDTO;
+import ApplicationGateway.dto.frontend.UserDTO;
+import ApplicationGateway.service.ApplicationGatewayService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequiredArgsConstructor
+@Slf4j
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3050"}, allowCredentials = "true")
+public class ApplicationGatewayController {
+
+    private final ApplicationGatewayService applicationGatewayService;
+
+    // AUTHENTICATION AND AUTHORIZATION
+
+    @PostMapping(value= "/authenticate",consumes = "application/json", produces ="application/json")
+    public ResponseEntity<SecurityResponse> authenticate(
+            @RequestBody AuthenticationRequest authenticationRequest,
+            HttpServletResponse response
+    ) {
+        System.out.println(authenticationRequest.getUsername() + " " + authenticationRequest.getPasswordHash());
+        log.info("Authenticating the user");
+        ResponseEntity<AuthenticationResponse> authenticationResponseEntity = applicationGatewayService.authenticate(authenticationRequest);
+        AuthenticationResponse authenticationResponse = authenticationResponseEntity.getBody();
+
+        if(authenticationResponse.getIsAuthenticated()){
+            SecurityResponse securityResponse = SecurityResponse.builder()
+                    .role(authenticationResponse.getRole())
+                    .username(authenticationRequest.getUsername())
+                    .build();
+
+            Cookie cookie = new Cookie("token", authenticationResponse.getAccessToken());
+            cookie.setHttpOnly(true);
+            cookie.setAttribute("SameSite", "Strict"); //prevent CSRF
+            cookie.setSecure(true);
+            response.addCookie(cookie);
+
+
+            return ResponseEntity.status(HttpStatus.OK).body(securityResponse);
+        }
+        return ResponseEntity.status(401).build();
+    }
+
+    /*
+    @GetMapping(value= "/authorize", produces ="application/json")
+    public ResponseEntity<AuthorizationResponse> authorize(
+            @RequestParam String accessToken
+    ){
+        log.info("Authorizing the user...");
+        return applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+    }
+
+     */
+
+    // ASSET MANAGEMENT
+
+
+    //This endpoint is called only by the asyncController
+    @PostMapping(value = "/addDevice")
+    public ResponseEntity<String> addDevice(@RequestParam String name){
+        log.info("AddDevice endpoint called");
+        //TODO: understand if we have to check who calls this endpoint
+        log.info("User authorized");
+        return applicationGatewayService.addDevice(name);
+    }
+
+    @GetMapping(value = "/getAsset")
+    public ResponseEntity<String> getAsset(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String id
+    ){
+        log.info("GetAsset endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.getAsset(id);
+    }
+
+    @PostMapping(value = "/addAsset")
+    public ResponseEntity<Void> addAsset(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String name,
+            @RequestParam String label){
+        log.info("InsertAsset endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.addAsset(name, label);
+    }
+
+    @PostMapping(value = "/deleteAsset")
+    public ResponseEntity<Void> deleteAsset(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String assetId){
+        log.info("DeleteAsset endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.deleteAsset(assetId);
+    }
+
+    @PostMapping(value = "/deleteRelationship")
+    public ResponseEntity<Void> deleteRelationship(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String relId){
+        log.info("DeleteRelationship endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.deleteRelationship(relId);
+
+    }
+
+
+    @PostMapping(value = "/addAttributes")
+    public ResponseEntity<Void> addAttributes(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String assetId,
+            @RequestBody AttributesDTO attributes){
+        log.info("AddAttributes endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.addAttributes(assetId,attributes);
+    }
+
+    @PostMapping(value = "/removeAttributes")
+    public ResponseEntity<Void> removeAttributes(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String assetId,
+            @RequestBody NamesDTO attributes){
+        log.info("RemoveAttributes endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.removeAttributes(assetId,attributes);
+    }
+
+    @GetMapping(value = "/getAllUnregisteredDevices")
+    public ResponseEntity<List<UnregisteredDeviceDTO>> getAllUnregisteredDevices(@CookieValue (value = "token", defaultValue = "") String accessToken){
+        log.info("GetAllUnregisteredDevices endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return ResponseEntity.ok(applicationGatewayService.getAllUnregisteredDevices());
+    }
+
+    @GetMapping(value = "/getAllRegisteredDevices")
+    public ResponseEntity<List<String>> getAllRegisteredDevices(@CookieValue (value = "token", defaultValue = "") String accessToken){
+        log.info("GetAllRegisteredDevices endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return ResponseEntity.ok(applicationGatewayService.getAllRegisteredDevices());
+    }
+
+    @PostMapping(value = "/registerDevice")
+    public ResponseEntity<Void> registerDevice(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String id,
+            @RequestBody DeviceDTO deviceDTO){
+        log.info("RegisterDevice endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.registerDevice(id,deviceDTO);
+    }
+
+    @PostMapping(value = "/addRelationships")
+    public ResponseEntity<Void> addRelationships(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String assetId,
+            @RequestBody RelationshipsDTO relationships){
+        log.info("addRelationships endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.addRelationships(assetId,relationships);
+    }
+
+    @PostMapping(value = "/removeRelationships")
+    public ResponseEntity<Void> removeRelationships(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestBody RelationshipsDTO relationships){
+        log.info("removeRelationships endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.removeRelationships(relationships);
+    }
+
+    @GetMapping(value = "/getNetwork")
+    public ResponseEntity<String> getNetwork(
+            @CookieValue (value = "token", defaultValue = "") String accessToken){
+        log.info("GetNetwork endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.getNetwork();
+    }
+
+    /**
+     * This endpoint is called by the user to save a new model for a specific device
+     * @param modelDTO containts the deviceId, the model itself and a boolean to specify if the model is from the user or not
+     */
+    @PostMapping(value = "/addNewModel")
+    public ResponseEntity<Void> addNewModel(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestBody ModelDTO modelDTO){
+        log.info("AddNewModel endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.addNewModel(modelDTO);
+    }
+
+    /**
+     * This endpoint is called by the user to request to retrieve the updated model for a specific device
+     * @param accessToken the token of the user
+     * @param deviceId the id of the device
+     */
+    @PostMapping(value = "/updateModel")
+    public ResponseEntity<Void> updateModel(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String deviceId){
+        log.info("UpdateModel endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.updateModel(deviceId);
+    }
+
+
+    /**
+     * This endpoint is called by the asyncController to save a new model for a specific device
+     */
+    @PostMapping(value = "/sendModel")
+    public ResponseEntity<Void> sendModel(@RequestBody ModelDTO modelDTO){
+        log.info("SendModel endpoint called");
+        return applicationGatewayService.sendModel(modelDTO);
+    }
+
+    /**
+     * This endpoint is called by the asyncController to notify that the model has been inserted for a specific device
+     */
+    @PostMapping(value = "/modelInserted")
+    public ResponseEntity<Void> modelInserted(@RequestParam String deviceId){
+        log.info("ModelInserted endpoint called");
+        return applicationGatewayService.modelInserted(deviceId);
+    }
+
+    /**
+     * This endpoint is called by the user to request to retrieve the updated data for a specific device
+     */
+    @PostMapping(value = "/updateData")
+    public ResponseEntity<Void> updateData(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String deviceId){
+        log.info("updateData endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.updateData(deviceId);
+    }
+
+    /**
+     * This endpoint is called by the asyncController to save the data for a specific device
+     */
+    @PostMapping(value = "/sendData")
+    public ResponseEntity<Void> sendData(@RequestBody DeviceDataDTO deviceDataDTO){
+        log.info("SendData endpoint called");
+        return applicationGatewayService.saveDeviceData(deviceDataDTO);
+    }
+
+    @GetMapping(value = "/getDeviceModelsHistory")
+    public ResponseEntity<String> getDeviceModelsHistory(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String deviceId) {
+        log.info("getDeviceModelsHistory endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+        if (!authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.getDeviceModelsHistory(deviceId);
+    }
+
+    @GetMapping(value = "/retrieveModel")
+    public ResponseEntity<byte[]> retrieveModel(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String deviceId,
+            @RequestParam String modelName,
+            @RequestParam Boolean fromUser){
+        log.info("RetrieveModel endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.retrieveModel(deviceId,modelName,fromUser);
+    }
+
+    @GetMapping(value = "/retrieveDeviceDataMetadata")
+    public ResponseEntity<String> retrieveDeviceDataMetadata(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String deviceId, @RequestParam String measurement)
+    {
+        log.info("RetrieveDeviceDataMetadata endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.retrieveDeviceDataMetadata(deviceId,measurement);
+    }
+
+    @GetMapping(value = "/retrieveDeviceDataMeasurements")
+    public ResponseEntity<String> retrieveDeviceDataMeasurements(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestParam String deviceId) {
+        log.info("RetrieveDeviceDataMeasurements endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.retrieveDeviceDataMeasurements(deviceId);
+    }
+
+    @GetMapping(value = "/downloadDeviceData", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<InputStreamResource> downloadDeviceData(
+            @CookieValue(value = "token", defaultValue = "") String accessToken,
+            @RequestParam String deviceId) {
+        log.info("DownloadDeviceData endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+        if (!authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.downloadDeviceData(deviceId);
+    }
+
+
+
+    //------------ USER MANAGEMENT ------------//
+    @GetMapping(value="/users")
+    @ResponseBody
+    public ResponseEntity<CompactUserDTO> getUsers(
+            @CookieValue (value = "token", defaultValue = "") String accessToken
+    ){
+        log.info("GetUsers endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        log.info("User authorized");
+        return applicationGatewayService.getUsers();
+    }
+
+    @PostMapping(value = "/addUser")
+    public ResponseEntity<Void> addUser(
+            @CookieValue (value = "token", defaultValue = "") String accessToken,
+            @RequestBody UserDTO userDTO){
+        log.info("AddUser endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize( new AuthorizationRequest(accessToken) );
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.addUser(userDTO);
+
+    }
+
+    @PostMapping(value = "/deleteUser")
+    public ResponseEntity<Void> deleteUser(
+            @CookieValue (value = "token" ,defaultValue = "") String accessToken,
+            @RequestParam long id){
+        log.info("DeleteUser endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.deleteUser(id);
+    }
+
+    @PostMapping(value = "/updateUserRole")
+    public ResponseEntity<Void> updateUserRole(
+            @CookieValue (value = "token" ,defaultValue = "") String accessToken,
+            @RequestParam long id, @RequestParam String role){
+        log.info("UpdateUserRole endpoint called");
+        ResponseEntity<AuthorizationResponse> authorization = applicationGatewayService.authorize(new AuthorizationRequest(accessToken));
+        if( !authorization.getBody().getIsAuthorized()) {
+            log.info("User unauthorized");
+            return ResponseEntity.status(401).build();
+        }
+        return applicationGatewayService.updateUserRole(id, Role.valueOf(role));
+    }
+
+}

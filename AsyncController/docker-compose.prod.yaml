@@ -1,0 +1,23 @@
+version: '3.5'
+
+services:
+  b-middleware:
+    build:
+      context: Async-Backend
+      dockerfile: middleware.containerfile
+    hostname: b-middleware
+    image: b-middleware:latest
+    ports:
+      - "9096:9096"
+    networks:
+      - int-net
+    volumes:
+      - middleware_data:/middleware_data
+
+networks:
+  int-net:
+    external: true
+    name: int-net
+
+volumes:
+  middleware_data:

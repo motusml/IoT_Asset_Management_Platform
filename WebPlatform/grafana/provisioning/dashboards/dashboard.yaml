@@ -1,0 +1,13 @@
+# # config file version
+apiVersion: 1
+
+providers:
+ - name: 'default'
+   orgId: 1
+   type: file
+   updateIntervalSeconds: 10
+   allowUiUpdates: true
+   options:
+     path: /etc/grafana/provisioning/dashboards
+
+

@@ -1,0 +1,147 @@
+version: '3.5'
+
+services:
+  b-datamanager:
+    build:
+      context: Backend/
+      dockerfile: dataManager.containerfile
+    image: b-datamanager:latest
+    expose:
+      - 9090
+    networks:
+      - backend
+    volumes:
+      - data:/data
+
+  b-authenticationmanager:
+    build:
+      context: Backend/
+      dockerfile: authenticationManager.containerfile
+    image: b-authenticationmanager:latest
+    expose:
+      - 9091
+    networks:
+      - backend
+    depends_on:
+      - b-datamanager
+
+  b-assetmanager:
+    build:
+      context: Backend/
+      dockerfile: assetManager.containerfile
+    image: b-assetmanager:latest
+    expose:
+      - 9092
+    networks:
+      - backend
+    depends_on:
+      - b-datamanager
+
+  b-applicationgateway:
+    build:
+      context: Backend/
+      dockerfile: applicationGateway.containerfile
+    hostname: b-applicationgateway
+    image: b-applicationgateway:latest
+    ports:
+      - "9093:9093"
+    networks:
+      - backend
+      - n-frontend
+      - int-net
+    depends_on:
+      - b-datamanager
+      - b-authenticationmanager
+      - b-assetmanager
+
+  influxdb:
+    image: influxdb:2.6-alpine
+    container_name: influxdb
+    expose:
+      - "8086"
+    networks:
+      - backend
+      - graf-influx
+    volumes:
+      - influxdbv2:/var/lib/influxdb2:rw
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=password
+      - DOCKER_INFLUXDB_INIT_ORG=motusml
+      - DOCKER_INFLUXDB_INIT_BUCKET=serverStats
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mytoken
+
+  grafana:
+    image: grafana/grafana-oss
+    container_name: grafana
+    expose:
+      - 3030
+    networks:
+      - graf-influx
+    volumes:
+      - grafana-storage:/var/lib/grafana:rw
+      #- ./grafana/grafana.ini:/etc/grafana/grafana.ini:rw
+      - ./grafana/provisioning/dashboards/:/etc/grafana/provisioning/dashboards/
+      - ./grafana/provisioning/datasources/:/etc/grafana/provisioning/datasources/
+    environment:
+      - GF_SERVER_ROOT_URL=/grafana/
+      - GF_SERVER_HTTP_PORT=3030
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_NAME=Main Org.
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Editor
+      - GF_USERS_AUTO_ASSIGN_ORG_ID=1
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    depends_on:
+      - influxdb
+
+  nginx:
+    depends_on:
+      - b-applicationgateway
+      - f-frontend
+      - grafana
+      - influxdb
+    restart: always
+    container_name: nginx
+    image: nginx:latest
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    volumes:
+      - ./nginx/:/etc/nginx/conf.d/
+    ports:
+      - "3050:80"
+    networks:
+      - n-frontend
+      - backend
+      - graf-influx
+
+  f-frontend:
+    stdin_open: true
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    build:
+      dockerfile: Dockerfile
+      context: ./Frontend/my-app
+    image: f-frontend:latest
+    networks:
+      - n-frontend
+    expose:
+      - 3002
+
+networks:
+  backend:
+  n-frontend:
+  int-net:
+    external: true
+    name: int-net
+  graf-influx:
+
+
+volumes:
+  data:
+  influxdbv2:
+  grafana-storage:

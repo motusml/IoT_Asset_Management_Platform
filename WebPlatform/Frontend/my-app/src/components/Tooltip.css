@@ -1,0 +1,17 @@
+.tooltip {
+    padding: 5px;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.tooltip h3 {
+    margin-top: 0; /* Remove top margin for heading */
+    font-size: 15px; /* Adjust font size for heading */
+}
+
+.tooltip p {
+    margin: 5px 0; /* Reduce vertical spacing between paragraphs */
+    font-size: 12px; /* Adjust font size for paragraphs */
+}
