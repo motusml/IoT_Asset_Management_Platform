@@ -16,7 +16,7 @@ The platform is build upon Docker. Once installed and run, open the terminal and
 
 ```
 cd IoT_Asset_Management_Platform
-bash clean-and-build.sh -cb
+bash start-docker.sh -cb
 
 ```
 Then, open the browser and go to `localhost:3050`. The credentials for authentication are:
@@ -28,12 +28,12 @@ Password: Admin
 
 ### Stop deploy
 ```
-bash clean-and-build.sh -d
+bash start-docker.sh -d
 ```
 
 ### Clean environment
 ```
-bash clean-and-build.sh -c
+bash start-docker.sh -c
 ```
 
 You can find more information [here](/Documents)
