@@ -23,6 +23,10 @@ function clean_docker() {
     docker volume prune -f
     docker builder prune -f
     docker network prune -f
+    docker volume rm asynccontroller_middleware_data
+    docker volume rm webplatform_data
+    docker volume rm webplatform_grafana-storage
+    docker volume rm webplatform_influxdbv2
     echo "Docker cleaned."
 }
 
